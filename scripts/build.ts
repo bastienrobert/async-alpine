@@ -1,47 +1,49 @@
-import esbuild from 'esbuild'
+import esbuild from 'esbuild';
 
-buildAll()
+buildAll();
 
 async function buildAll() {
 	return Promise.all([
 		build('script', {
-			entryPoints: ['src/script.js'],
+			entryPoints: ['src/script.ts'],
 			platform: 'browser',
 			minify: true,
 			target: 'es6',
 		}),
 		build('esm', {
-			entryPoints: ['src/async-alpine.js'],
+			entryPoints: ['src/async-alpine.ts'],
 			platform: 'neutral',
 			mainFields: ['module', 'main'],
 		}),
 		build('cjs', {
-			entryPoints: ['src/async-alpine.js'],
+			entryPoints: ['src/async-alpine.ts'],
 			target: ['node10.4'],
 			platform: 'node',
 		}),
-	])
+	]);
 }
 
-async function build(name, options) {
-	const path = `async-alpine.${name}.js`
-	console.log(`Building ${name}`)
+async function build(
+	name: string,
+	options: esbuild.SameShape<esbuild.BuildOptions, esbuild.BuildOptions>
+) {
+	const path = `async-alpine.${name}.js`;
+	console.log(`Building ${name}`);
 
 	if (process.argv.includes('--watch')) {
-		let ctx = await esbuild.context({
+		const ctx = await esbuild.context({
 			outfile: `./dist/${path}`,
 			bundle: true,
 			logLevel: 'info',
 			sourcemap: true,
 			...options,
-		})
-		await ctx.watch()
-	}
-	else {
+		});
+		await ctx.watch();
+	} else {
 		return esbuild.build({
 			outfile: `./dist/${path}`,
 			bundle: true,
 			...options,
-		})
+		});
 	}
 }

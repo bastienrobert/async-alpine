@@ -1,15 +1,11 @@
-// src/strategies.js
-function eager() {
-  return true;
+// src/strategies.ts
+function eager(_) {
+  return Promise.resolve(true);
 }
 function event({ component, argument }) {
   return new Promise((resolve) => {
     if (argument) {
-      window.addEventListener(
-        argument,
-        () => resolve(),
-        { once: true }
-      );
+      window.addEventListener(argument, () => resolve(), { once: true });
     } else {
       const cb = (e) => {
         if (e.detail.id !== component.id) return;
@@ -20,7 +16,7 @@ function event({ component, argument }) {
     }
   });
 }
-function idle() {
+function idle(_) {
   return new Promise((resolve) => {
     if ("requestIdleCallback" in window) {
       window.requestIdleCallback(resolve);
@@ -43,27 +39,34 @@ function media({ argument }) {
     }
   });
 }
-function visible({ component, argument }) {
+function visible({
+  component,
+  argument
+}) {
   return new Promise((resolve) => {
     const rootMargin = argument || "0px 0px 0px 0px";
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        observer.disconnect();
-        resolve();
-      }
-    }, { rootMargin });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          observer.disconnect();
+          resolve();
+        }
+      },
+      { rootMargin }
+    );
     observer.observe(component.el);
   });
 }
-var strategies_default = {
+var strategies = {
   eager,
   event,
   idle,
   media,
   visible
 };
+var strategies_default = strategies;
 
-// src/requirements.js
+// src/requirements.ts
 async function awaitRequirements(component) {
   const requirements = parseRequirements(component.strategy);
   await generateRequirements(component, requirements);
@@ -72,20 +75,29 @@ async function generateRequirements(component, requirements) {
   if (requirements.type === "expression") {
     if (requirements.operator === "&&") {
       return Promise.all(
-        requirements.parameters.map((param) => generateRequirements(component, param))
+        requirements.parameters.map(
+          (param) => generateRequirements(component, param)
+        )
       );
     }
     if (requirements.operator === "||") {
       return Promise.any(
-        requirements.parameters.map((param) => generateRequirements(component, param))
+        requirements.parameters.map(
+          (param) => generateRequirements(component, param)
+        )
       );
     }
   }
-  if (!strategies_default[requirements.method]) return false;
-  return strategies_default[requirements.method]({
-    component,
-    argument: requirements.argument
-  });
+  if (requirements.type === "method") {
+    if (!strategies_default[requirements.method]) {
+      return false;
+    }
+    return strategies_default[requirements.method]({
+      component,
+      argument: requirements.argument
+    });
+  }
+  return false;
 }
 function parseRequirements(expression) {
   const tokens = tokenize(expression);
@@ -104,14 +116,16 @@ function tokenize(expression) {
   const tokens = [];
   let match;
   while ((match = regex.exec(expression)) !== null) {
-    const [_, parenthesis, operator, token] = match;
+    const [, parenthesis, operator, token] = match;
     if (parenthesis !== void 0) {
-      tokens.push({ type: "parenthesis", value: parenthesis });
+      tokens.push({
+        type: "parenthesis",
+        value: parenthesis
+      });
     } else if (operator !== void 0) {
       tokens.push({
         type: "operator",
-        // we do the below to make operators backwards-compatible with previous
-        // versions of Async Alpine, where '|' is equivalent to &&
+        // Make operators backwards-compatible with previous versions
         value: operator === "|" ? "&&" : operator
       });
     } else {
@@ -126,8 +140,8 @@ function tokenize(expression) {
           token.indexOf(")")
         );
       }
-      if (token.method === "immediate") {
-        token.method = "eager";
+      if (tokenObj.method === "immediate") {
+        tokenObj.method = "eager";
       }
       tokens.push(tokenObj);
     }
@@ -136,7 +150,7 @@ function tokenize(expression) {
 }
 function parseExpression(tokens) {
   let ast = parseTerm(tokens);
-  while (tokens.length > 0 && (tokens[0].value === "&&" || tokens[0].value === "|" || tokens[0].value === "||")) {
+  while (tokens.length > 0 && tokens[0].type === "operator" && (tokens[0].value === "&&" || tokens[0].value === "|" || tokens[0].value === "||")) {
     const operator = tokens.shift().value;
     const right = parseTerm(tokens);
     if (ast.type === "expression" && ast.operator === operator) {
@@ -152,10 +166,10 @@ function parseExpression(tokens) {
   return ast;
 }
 function parseTerm(tokens) {
-  if (tokens[0].value === "(") {
+  if (tokens[0].type === "parenthesis" && tokens[0].value === "(") {
     tokens.shift();
     const ast = parseExpression(tokens);
-    if (tokens[0].value === ")") {
+    if (tokens[0] && tokens[0].type === "parenthesis" && tokens[0].value === ")") {
       tokens.shift();
     }
     return ast;
@@ -164,7 +178,7 @@ function parseTerm(tokens) {
   }
 }
 
-// src/async-alpine.js
+// src/async-alpine.ts
 function async_alpine_default(Alpine) {
   const directive = "load";
   const srcAttr = Alpine.prefixed("load-src");
@@ -173,8 +187,8 @@ function async_alpine_default(Alpine) {
     defaultStrategy: "eager",
     keepRelativeURLs: false
   };
-  let alias = false;
-  let data = {};
+  let alias = null;
+  const data = {};
   let realIndex = 0;
   function index() {
     return realIndex++;
@@ -185,7 +199,7 @@ function async_alpine_default(Alpine) {
       ...opts
     };
   };
-  Alpine.asyncData = (name, download2 = false) => {
+  Alpine.asyncData = (name, download2) => {
     data[name] = {
       loaded: false,
       download: download2
@@ -222,7 +236,7 @@ function async_alpine_default(Alpine) {
         name,
         strategy,
         el,
-        id: el.id || index()
+        id: el.id || index().toString()
       });
       await download(name);
       activate(el);
@@ -260,7 +274,7 @@ function async_alpine_default(Alpine) {
   }
   function activate(el) {
     Alpine.destroyTree(el);
-    el._x_ignore = false;
+    el._x_ignore = void 0;
     el.removeAttribute(ignoreAttr);
     if (el.closest(`[${ignoreAttr}]`)) return;
     Alpine.initTree(el);
@@ -269,9 +283,10 @@ function async_alpine_default(Alpine) {
     if (!alias || data[name]) return;
     if (typeof alias === "function") {
       Alpine.asyncData(name, alias);
-      return;
     }
-    Alpine.asyncUrl(name, alias.replaceAll("[name]", name));
+    if (typeof alias === "string") {
+      Alpine.asyncUrl(name, alias.replaceAll("[name]", name));
+    }
   }
   function parseName(attribute) {
     const parsedName = (attribute || "").split(/[({]/g)[0];

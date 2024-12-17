@@ -1,6 +1,20 @@
+import type { Alpine, ElementWithXAttributes } from 'alpinejs'
+
 import { awaitRequirements } from './requirements.js'
 
-export default function (Alpine) {
+export interface AlpineAsyncOptions {
+	defaultStrategy: string
+	keepRelativeURLs: boolean
+}
+
+export interface AlpineAsyncData {
+	loaded: boolean
+	download: AlpineAsyncDataDownload
+}
+
+export type AlpineAsyncDataDownload = (name?: string) => Promise<any>
+
+export default function (Alpine: Alpine) {
 	/**
 	 * =================================
 	 * Configuration
@@ -21,10 +35,10 @@ export default function (Alpine) {
 	 * =================================
 	 */
 	// if we fall back to an alias when components aren't pre-registered
-	let alias = false
+	let alias: AlpineAsyncDataDownload | string | null = null
 
 	// data cache
-	let data = {}
+	const data: Record<string, AlpineAsyncData> = {}
 
 	// index for ID generation
 	let realIndex = 0
@@ -46,7 +60,7 @@ export default function (Alpine) {
 	}
 
 	// register a component by name and with a download function. Used internally and publicly
-	Alpine.asyncData = (name, download = false) => {
+	Alpine.asyncData = (name, download) => {
 		data[name] = {
 			loaded: false,
 			download,
@@ -65,6 +79,7 @@ export default function (Alpine) {
 			),
 		}
 	}
+
 	// sets the path or function to fall back to if a component isn't specified
 	Alpine.asyncAlias = (path) => {
 		alias = path
@@ -76,7 +91,7 @@ export default function (Alpine) {
 	 * =================================
 	 */
 	// inline handler adds x-ignore immediately and synchronously
-	const syncHandler = (el) => {
+	const syncHandler = (el: HTMLElement) => {
 		Alpine.skipDuringClone(() => {
 			if (el._x_async) return
 			el._x_async = 'init'
@@ -86,16 +101,17 @@ export default function (Alpine) {
 	}
 
 	// the bulk of processing happens within Alpine's deferred handler
-	const handler = async (el) => {
+	const handler = async (el: ElementWithXAttributes) => {
 		Alpine.skipDuringClone(async () => {
 			if (el._x_async !== 'init') return
 			el._x_async = 'await'
 			const { name, strategy } = elementPrep(el)
+
 			await awaitRequirements({
 				name,
 				strategy,
 				el,
-				id: el.id || index(),
+				id: el.id || index().toString(),
 			})
 			await download(name)
 			activate(el)
@@ -113,7 +129,7 @@ export default function (Alpine) {
 	 * =================================
 	 */
 	// get name and strategy from the element attributes and handle inline src
-	function elementPrep(el) {
+	function elementPrep(el: HTMLElement) {
 		const name = parseName(el.getAttribute(Alpine.prefixed('data')))
 		const strategy = el.getAttribute(Alpine.prefixed(directive)) || options.defaultStrategy
 
@@ -130,7 +146,7 @@ export default function (Alpine) {
 	}
 
 	// check if the component has been downloaded, if not trigger download and register with Alpine
-	async function download(name) {
+	async function download(name: string) {
 		if (name.startsWith('_x_async_')) return
 		handleAlias(name)
 
@@ -142,7 +158,7 @@ export default function (Alpine) {
 	}
 
 	// run the callback function to get the module and find the appropriate import
-	async function getModule(name) {
+	async function getModule(name: string) {
 		if (!data[name]) return
 
 		const module = await data[name].download(name)
@@ -153,14 +169,15 @@ export default function (Alpine) {
 		// work out which export to use in order of preference:
 		// name; default; first export
 		let whichExport = module[name] || module.default || Object.values(module)[0] || false
+
 		return whichExport
 	}
 
 	// remove ignore attribute and property, then force Alpine to re-scan the tree
-	function activate(el) {
+	function activate(el: ElementWithXAttributes) {
 		Alpine.destroyTree(el)
 
-		el._x_ignore = false
+		el._x_ignore = undefined
 		el.removeAttribute(ignoreAttr)
 
 		// check there are no x-ignore elements within this element's ancestors
@@ -170,17 +187,20 @@ export default function (Alpine) {
 	}
 
 	// if a component isn't specified in data, allow to fall back to a url or function
-	function handleAlias(name) {
+	function handleAlias(name: string) {
 		if (!alias || data[name]) return
+		
 		if (typeof alias === 'function') {
 			Alpine.asyncData(name, alias)
-			return
 		}
-		Alpine.asyncUrl(name, alias.replaceAll('[name]', name))
+
+		if (typeof alias === 'string') {
+			Alpine.asyncUrl(name, alias.replaceAll('[name]', name))
+		}
 	}
 
 	// take x-data content to parse out name. 'output("test")' becomes 'output'
-	function parseName(attribute) {
+	function parseName(attribute: string | null) {
 		const parsedName = (attribute || '').split(/[({]/g)[0]
 		// we need this to support enabling inline expressions without a download
 		const ourName = parsedName || `_x_async_${index()}`
@@ -189,7 +209,7 @@ export default function (Alpine) {
 
 	// if the URL is relative then convert it to absolute based on the document baseURI
 	// this is needed for when async alpine is loaded from a different origin than the page and component
-	function parseUrl(url) {
+	function parseUrl(url: string) {
 		// if the user has opted in to relative URLs then don't prefix the document baseURI.
 		if (options.keepRelativeURLs) return url
 		const absoluteReg = new RegExp('^(?:[a-z+]+:)?//', 'i')

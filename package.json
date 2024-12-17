@@ -28,18 +28,23 @@
   "devDependencies": {
     "@playwright/test": "^1.45.3",
     "@stylistic/eslint-plugin": "^2.3.0",
+    "@types/alpinejs": "^3.13.11",
     "@types/node": "^22.0.0",
-    "alpinejs": "^3.14.1",
     "esbuild": "^0.23.0",
     "eslint": "^9.7.0",
     "http-server": "^14.1.1",
     "husky": "^9.1.1",
     "lint-staged": "^15.2.7",
-    "playwright": "^1.45.3"
+    "playwright": "^1.45.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "peerDependencies": {
+    "alpinejs": "^3.14.7"
   },
   "scripts": {
-    "dev": "node scripts/build.js --watch",
-    "build": "node scripts/build.js",
+    "dev": "tsx scripts/build.js --watch",
+    "build": "tsx scripts/build.js",
     "test": "playwright test",
     "lint": "eslint",
     "format": "eslint --fix",
